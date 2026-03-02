@@ -198,7 +198,7 @@ class AutomationBot:
         
         Returns:
             dict with keys: stock_id, company_name, pdf_url
-            or None if not found
+            or None if not found or result is not PDF
         """
         # Get company info from yfinance
         ticker = yf.Ticker(stock_code)
@@ -209,7 +209,11 @@ class AutomationBot:
         
         if not company_name or not company_site:
             print(f"⚠️ Could not fetch info for {stock_code}")
-            return None
+            return {
+                "stock_id": stock_id,
+                "company_name": company_name,
+                "pdf_url": None
+            }
         
         print(f"\n🔎 Processing {company_name} ({stock_code})")
         
@@ -217,7 +221,16 @@ class AutomationBot:
             results = await self.run(company_site)
             pdf_url = results.get("current_url", "")
             
-            print("✅ Found:", pdf_url)
+            # Check if result is a PDF
+            if not pdf_url or not self._is_pdf_url(pdf_url):
+                print(f"❌ Result is not a PDF: {pdf_url}")
+                return {
+                "stock_id": stock_id,
+                "company_name": company_name,
+                "pdf_url": None
+                }
+            
+            print("✅ Found PDF:", pdf_url)
             
             return {
                 "stock_id": stock_id,
@@ -230,8 +243,15 @@ class AutomationBot:
             return {
                 "stock_id": stock_id,
                 "company_name": company_name,
-                "pdf_url": f"ERROR: {str(e)}"
+                "pdf_url": None
             }
+    
+    def _is_pdf_url(self, url: str) -> bool:
+        """Check if URL is a PDF file."""
+        if not url:
+            return False
+        url_lower = url.lower()
+        return url_lower.endswith('.pdf') or '.pdf?' in url_lower
 
 async def run_single_company(auto_bot, stock_code: str):
     """
@@ -250,20 +270,24 @@ async def run_bot(auto_bot, stock_list: list, output_file: str):
     """
     Run auto_bot for each stock code and save PDF URL results to CSV.
     Auto-fetch company info from yfinance.
+    Save results immediately after each company is processed.
 
     Parameters:
         auto_bot: your autonomous web bot (must have async .run())
         stock_list: list of stock codes with .T suffix (e.g., ["6920.T", "7203.T"])
         output_file: str, CSV filename
     """
+    import os
 
     # Create CSV header
-    with open(output_file, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.writer(f)
-        writer.writerow(["stock_id", "company_name", "pdf_url"])
+    file_exists = os.path.exists(output_file)
+    if not file_exists:
+        with open(output_file, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f)
+            writer.writerow(["stock_id", "company_name", "pdf_url"])
 
     # Main loop
-    for stock_code in stock_list:
+    for idx, stock_code in enumerate(stock_list, 1):
         # Get company info from yfinance
         ticker = yf.Ticker(stock_code)
         info = ticker.info
@@ -272,25 +296,33 @@ async def run_bot(auto_bot, stock_list: list, output_file: str):
         stock_id = stock_code.replace(".T", "")
         
         if not company_name or not company_site:
-            print(f"⚠️ Could not fetch info for {stock_code}")
+            print(f"[{idx}/{len(stock_list)}] ⚠️ Could not fetch info for {stock_code}")
+            # Save None result
+            with open(output_file, "a", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f)
+                writer.writerow([stock_id, "", ""])
             continue
         
-        print(f"\n🔎 Processing {company_name} ({stock_code})")
+        print(f"\n[{idx}/{len(stock_list)}] 🔎 Processing {company_name} ({stock_code})")
 
         try:
-            results = await auto_bot.run(company_site)
-            pdf_url = results.get("current_url", "")
-
-            print("✅ Found:", pdf_url)
+            result = await auto_bot.run_single_company(stock_code)
+            
+            if result and result.get("pdf_url"):
+                pdf_url = result.get("pdf_url")
+                print("✅ Found PDF:", pdf_url)
+            else:
+                pdf_url = None
+                print("❌ No PDF found or result is not a PDF")
 
         except Exception as e:
-            pdf_url = f"ERROR: {str(e)}"
+            pdf_url = None
             print("❌ Error:", e)
 
-        # Append result
+        # Append result immediately
         with open(output_file, "a", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f)
-            writer.writerow([stock_id, company_name, pdf_url])
+            writer.writerow([stock_id, company_name, pdf_url or ""])
 
         await asyncio.sleep(2)  # tránh rate limit / block
 

@@ -164,7 +164,62 @@ graph TB
 
 ---
 
-### 5️⃣ **Automation Bot**
+### 5️⃣ **Search Fallback**
+Tìm kiếm báo cáo với chiến lược fallback: JPX → Company Site → Nikkei
+
+**Flow:**
+```mermaid
+flowchart TD
+    A["Start: Search Governance Report"]
+    
+    A --> B["1. JPX Search"]
+    B --> B1{Is PDF?}
+    B1 -->|Yes| G["✅ Return URL + Date<br/>Source: JPX"]
+    B1 -->|No/Fail| C["2. Company Site Search"]
+    
+    C --> C1{Is PDF?}
+    C1 -->|Yes| G
+    C1 -->|No/Fail| D["3. Nikkei Search"]
+    
+    D --> D1{Is PDF?}
+    D1 -->|Yes| G
+    D1 -->|No/Fail| H["❌ Return None<br/>All sources failed"]
+    
+    G --> I["Save to CSV"]
+    H --> I
+```
+
+**Chiến lược:**
+1. **Ưu tiên JPX** - Tìm trên JPX trước (date chính xác nhất)
+2. **Fallback Company Site** - Nếu JPX fail/not PDF, thử Company Site
+3. **Fallback Nikkei** - Nếu Company Site fail/not PDF, thử Nikkei
+4. **Kết quả None** - Nếu tất cả fail, return None
+
+**Key Features:**
+- ✅ Tự động fetch info từ yfinance
+- ✅ Kiểm tra PDF validation (chỉ nhận file .pdf)
+- ✅ Capture date publication của report
+- ✅ Lưu kết quả ngay lập tức (append mode)
+- ✅ Xử lý lỗi gracefully
+
+**Output CSV columns:**
+- `stock_code` - Mã chứng chỉ (e.g., "6920.T")
+- `company_name` - Tên công ty
+- `url` - PDF URL
+- `source` - Nguồn tìm được ('jpx', 'company_site', 'nikkei')
+- `report_date` - Ngày publication của report
+- `success` - True/False
+- `error_message` - Thông báo lỗi (nếu có)
+
+**Functions:**
+- `search_governance_fallback()` - Search 1 stock code
+- `search_governance_fallback_batch()` - Search & save danh sách
+
+**Files:** `search_governance_fallback.py`
+
+---
+
+### 6️⃣ **Automation Bot**
 Bot tự động duyệt web tìm báo cáo bằng LLM
 
 **Flow:**
@@ -183,8 +238,10 @@ graph LR
 - LLM phân tích links
 - Tự động theo dõi cycle (không lặp lại URLs)
 - Max iterations = 5 để tránh vô hạn loop
+- Validation PDF trước khi return
 
 **Files:** `automation_bot.py`
 
 ---
+
 

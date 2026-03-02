@@ -5,9 +5,12 @@ description = ""
 authors = [
     {name = "Hoan Ha Khai ",email = "hoan.hk@human-brain.ai"}
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 dependencies = [
-    "yfinance (>=1.2.0,<2.0.0)"
+    "yfinance (>=1.2.0,<2.0.0)",
+    "playwright (>=1.58.0,<2.0.0)",
+    "langchain-openai (>=1.1.10,<2.0.0)",
+    "pyserxng (>=0.1.0,<0.2.0)"
 ]
 
 

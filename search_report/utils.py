@@ -51,36 +51,37 @@ class PlaywrightCrawler:
     async def extract_links(self, url: str):
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=self.headless)
-            page = await browser.new_page()
-
-            await page.goto(url, wait_until="domcontentloaded")
-            # Skip networkidle - it causes timeout on pages with continuous network activity
-            await page.wait_for_timeout(2000)  # Wait 2 seconds for dynamic content to load
-
-            await self._scroll_page(page)
-
             try:
-                await page.wait_for_selector("a[href$='.pdf']", timeout=1000)
-            except:
-                print("⚠ Không thấy PDF selector (có thể trang không có)")
+                page = await browser.new_page()
 
-            elements = await page.eval_on_selector_all(
-                "a[href]",
-                """
-                els => els.map(e => ({
-                    text: e.innerText ? e.innerText.trim() : '',
-                    href: e.href,
-                }))
-                """
-            )
+                await page.goto(url, wait_until="domcontentloaded")
+                # Skip networkidle - it causes timeout on pages with continuous network activity
+                await page.wait_for_timeout(2000)  # Wait 2 seconds for dynamic content to load
 
-            await browser.close()
+                await self._scroll_page(page)
 
-        cleaned = []
-        for el in elements:
-            cleaned.append({
-                "text": self.clean_text(el["text"]),
-                "href": el["href"],
-            })
+                try:
+                    await page.wait_for_selector("a[href$='.pdf']", timeout=1000)
+                except:
+                    print("⚠️ No PDF links found, proceeding with available links.")
 
-        return cleaned
+                elements = await page.eval_on_selector_all(
+                    "a[href]",
+                    """
+                    els => els.map(e => ({
+                        text: e.innerText ? e.innerText.trim() : '',
+                        href: e.href,
+                    }))
+                    """
+                )
+
+                cleaned = []
+                for el in elements:
+                    cleaned.append({
+                        "text": self.clean_text(el["text"]),
+                        "href": el["href"],
+                    })
+
+                return cleaned
+            finally:
+                await browser.close()
